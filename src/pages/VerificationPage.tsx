@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -27,6 +27,9 @@ import {
 import Webcam from 'react-webcam';
 import QRCode from 'qrcode.react';
 import { useAuth } from '../contexts/AuthContext';
+import voterService, { VoterInfo, VerificationResult } from '../services/voterService';
+import locationService from '../services/locationService';
+import PollingStationMap from '../components/PollingStationMap';
 
 // Custom styled components
 const VisuallyHiddenInput = styled('input')({
@@ -58,13 +61,91 @@ const VerificationPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verificationId, setVerificationId] = useState<string | null>(null);
-  const [voterDetails, setVoterDetails] = useState({
+  const [voterDetails, setVoterDetails] = useState<Partial<VoterInfo>>({
     fullName: '',
     voterID: '',
     address: '',
-    pollingStation: '',
+    pollingStationId: '',
     dob: ''
   });
+  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
+  const [states, setStates] = useState<string[]>([]);
+  const [districts, setDistricts] = useState<string[]>([]);
+  const [pollingStations, setPollingStations] = useState<any[]>([]);
+  const [selectedState, setSelectedState] = useState('');
+  const [selectedDistrict, setSelectedDistrict] = useState('');
+  const [userLocation, setUserLocation] = useState<{latitude: number, longitude: number} | undefined>();
+  
+  // Fetch states on component mount
+  useEffect(() => {
+    const fetchStates = async () => {
+      try {
+        const statesList = await locationService.getAllStates();
+        setStates(statesList);
+      } catch (error) {
+        console.error('Error fetching states:', error);
+      }
+    };
+    
+    fetchStates();
+  }, []);
+  
+  // Fetch districts when state changes
+  useEffect(() => {
+    if (!selectedState) {
+      setDistricts([]);
+      return;
+    }
+    
+    const fetchDistricts = async () => {
+      try {
+        const districtsList = await locationService.getDistrictsByState(selectedState);
+        setDistricts(districtsList);
+      } catch (error) {
+        console.error('Error fetching districts:', error);
+      }
+    };
+    
+    fetchDistricts();
+  }, [selectedState]);
+  
+  // Fetch polling stations when district changes
+  useEffect(() => {
+    if (!selectedState || !selectedDistrict) {
+      setPollingStations([]);
+      return;
+    }
+    
+    const fetchPollingStations = async () => {
+      try {
+        const stations = await voterService.getPollingStationsByStateAndDistrict(
+          selectedState, selectedDistrict
+        );
+        setPollingStations(stations);
+      } catch (error) {
+        console.error('Error fetching polling stations:', error);
+      }
+    };
+    
+    fetchPollingStations();
+  }, [selectedState, selectedDistrict]);
+  
+  // Get user location
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+        }
+      );
+    }
+  }, []);
   
   // Handle ID upload
   const handleIdUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,24 +183,25 @@ const VerificationPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // In a real implementation, this would call Firebase Cloud Functions
-      // to process the ID and facial image using Google Cloud Vision API 
-      // and other Google services for verification
+      if (!voterDetails.voterID) {
+        throw new Error('Voter ID is required');
+      }
       
-      // Simulate API call with timeout
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Verify voter using biometric data
+      const result = await voterService.verifyVoterByBiometric(
+        voterDetails.voterID,
+        facialImage || '',
+        idPreview || undefined
+      );
       
-      // Mock successful verification data
-      setVoterDetails({
-        fullName: currentUser?.displayName || 'John Doe',
-        voterID: 'VT' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0'),
-        address: '123 Main St, Anytown, USA',
-        pollingStation: 'Central Community Center',
-        dob: '1985-05-15'
-      });
+      setVerificationResult(result);
       
-      // Generate a unique verification ID
-      setVerificationId(`VF-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 5)}`);
+      if (result.success && result.voterInfo) {
+        setVoterDetails(result.voterInfo);
+        setVerificationId(result.verificationId || null);
+      } else {
+        setError(result.message);
+      }
       
       setLoading(false);
     } catch (error) {
@@ -156,6 +238,20 @@ const VerificationPage: React.FC = () => {
       default:
         return false;
     }
+  };
+  
+  // Update the polling station selection in the form
+  const handleStateChange = (e: React.ChangeEvent<{ value: unknown }>) => {
+    const state = e.target.value as string;
+    setSelectedState(state);
+    setSelectedDistrict('');
+    setVoterDetails({ ...voterDetails, state, district: '', pollingStationId: '' });
+  };
+  
+  const handleDistrictChange = (e: React.ChangeEvent<{ value: unknown }>) => {
+    const district = e.target.value as string;
+    setSelectedDistrict(district);
+    setVoterDetails({ ...voterDetails, district, pollingStationId: '' });
   };
   
   return (
@@ -201,10 +297,10 @@ const VerificationPage: React.FC = () => {
                       label="ID Type"
                       onChange={(e) => setIdType(e.target.value as string)}
                     >
-                      <MenuItem value="passport">Passport</MenuItem>
-                      <MenuItem value="driver_license">Driver's License</MenuItem>
-                      <MenuItem value="national_id">National ID Card</MenuItem>
+                      <MenuItem value="aadhaar">Aadhaar Card</MenuItem>
+                      <MenuItem value="pan">PAN Card</MenuItem>
                       <MenuItem value="voter_id">Voter ID Card</MenuItem>
+                      <MenuItem value="drivers_license">Driver's License</MenuItem>
                     </Select>
                   </FormControl>
                   
@@ -251,88 +347,74 @@ const VerificationPage: React.FC = () => {
                   )}
                 </Grid>
               </Grid>
-              
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                Your document will be securely processed using Google Cloud Vision API to extract information. 
-                All data is encrypted and handled according to data protection regulations.
-              </Typography>
             </Box>
           )}
           
-          {/* Step 2: Facial Photo */}
+          {/* Step 2: Capture Photo */}
           {activeStep === 1 && (
             <Box>
               <Typography variant="h6" gutterBottom>
-                Step 2: Capture Photo for Verification
+                Step 2: Capture Photo
               </Typography>
               <Typography variant="body1" paragraph>
-                Please take a clear photo of your face for identity verification.
+                Please position your face in the center of the frame and click "Capture Photo".
               </Typography>
               
-              <Grid container spacing={4}>
+              <Grid container spacing={3}>
                 <Grid item xs={12} md={6}>
-                  {!facialImage ? (
-                    <Box sx={{ position: 'relative' }}>
-                      <Webcam
-                        audio={false}
-                        ref={webcamRef}
-                        screenshotFormat="image/jpeg"
-                        videoConstraints={{ facingMode: "user" }}
-                        style={{ width: '100%', borderRadius: '8px' }}
-                      />
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<PhotoCameraIcon />}
-                        onClick={captureFacialImage}
-                        sx={{ mt: 2 }}
-                        fullWidth
-                      >
-                        Capture Photo
-                      </Button>
-                    </Box>
-                  ) : (
-                    <Box sx={{ position: 'relative' }}>
+                  <Box sx={{ position: 'relative', width: '100%', height: 300 }}>
+                    <Webcam
+                      ref={webcamRef}
+                      audio={false}
+                      screenshotFormat="image/jpeg"
+                      videoConstraints={{
+                        width: 640,
+                        height: 480,
+                        facingMode: "user"
+                      }}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        borderRadius: 1
+                      }}
+                    />
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  {facialImage ? (
+                    <Box>
                       <Box
                         component="img"
                         src={facialImage}
-                        alt="Facial Image"
+                        alt="Captured Photo"
                         sx={{
                           width: '100%',
-                          borderRadius: '8px'
+                          height: 300,
+                          objectFit: 'cover',
+                          borderRadius: 1,
+                          mb: 2
                         }}
                       />
                       <Button
                         variant="outlined"
-                        color="primary"
                         onClick={resetFacialImage}
-                        sx={{ mt: 2 }}
                         fullWidth
                       >
                         Retake Photo
                       </Button>
                     </Box>
+                  ) : (
+                    <Button
+                      variant="contained"
+                      startIcon={<PhotoCameraIcon />}
+                      onClick={captureFacialImage}
+                      fullWidth
+                    >
+                      Capture Photo
+                    </Button>
                   )}
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 3, bgcolor: 'info.light', color: 'info.contrastText' }}>
-                    <Typography variant="h6" gutterBottom>
-                      Tips for a Good Photo
-                    </Typography>
-                    <Typography variant="body2" component="ul" sx={{ pl: 2 }}>
-                      <li>Ensure your face is well-lit</li>
-                      <li>Look directly at the camera</li>
-                      <li>Remove sunglasses or other accessories that cover your face</li>
-                      <li>Maintain a neutral expression</li>
-                      <li>Make sure your entire face is visible in the frame</li>
-                    </Typography>
-                  </Paper>
-                  
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                    Your facial image will be compared with your ID document using Google's advanced facial recognition technology.
-                    This comparison is done securely and is not stored beyond the verification process.
-                  </Typography>
                 </Grid>
               </Grid>
             </Box>
@@ -342,183 +424,190 @@ const VerificationPage: React.FC = () => {
           {activeStep === 2 && (
             <Box>
               <Typography variant="h6" gutterBottom>
-                Step 3: Confirm Your Information
+                Step 3: Verify Information
               </Typography>
               <Typography variant="body1" paragraph>
-                Please review and confirm the information extracted from your ID.
+                Please enter your Voter ID and confirm your details.
               </Typography>
               
               <Grid container spacing={3}>
-                <Grid item xs={12} sm={6}>
+                <Grid item xs={12}>
                   <TextField
-                    label="Full Name"
-                    defaultValue={currentUser?.displayName || ''}
+                    label="Voter ID"
                     fullWidth
+                    value={voterDetails.voterID}
+                    onChange={(e) => setVoterDetails({ ...voterDetails, voterID: e.target.value })}
                     margin="normal"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Date of Birth"
-                    type="date"
-                    defaultValue="1990-01-01"
-                    fullWidth
-                    margin="normal"
-                    InputLabelProps={{ shrink: true }}
+                    required
                   />
                 </Grid>
                 <Grid item xs={12}>
                   <TextField
-                    label="Address"
-                    defaultValue=""
+                    label="Full Name"
                     fullWidth
+                    value={voterDetails.fullName}
+                    onChange={(e) => setVoterDetails({ ...voterDetails, fullName: e.target.value })}
                     margin="normal"
+                    required
                   />
                 </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="ID Number"
-                    defaultValue=""
-                    fullWidth
-                    margin="normal"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid item xs={12}>
                   <FormControl fullWidth margin="normal">
+                    <InputLabel id="state-label">State</InputLabel>
+                    <Select
+                      labelId="state-label"
+                      id="state"
+                      value={selectedState}
+                      label="State"
+                      onChange={handleStateChange}
+                    >
+                      {states.map((state) => (
+                        <MenuItem key={state} value={state}>
+                          {state}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12}>
+                  <FormControl fullWidth margin="normal" disabled={!selectedState}>
+                    <InputLabel id="district-label">District</InputLabel>
+                    <Select
+                      labelId="district-label"
+                      id="district"
+                      value={selectedDistrict}
+                      label="District"
+                      onChange={handleDistrictChange}
+                    >
+                      {districts.map((district) => (
+                        <MenuItem key={district} value={district}>
+                          {district}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12}>
+                  <FormControl fullWidth margin="normal" disabled={!selectedDistrict}>
                     <InputLabel id="polling-station-label">Polling Station</InputLabel>
                     <Select
                       labelId="polling-station-label"
                       id="polling-station"
+                      value={voterDetails.pollingStationId || ''}
                       label="Polling Station"
-                      defaultValue=""
+                      onChange={(e) => setVoterDetails({ ...voterDetails, pollingStationId: e.target.value as string })}
                     >
-                      <MenuItem value="station1">Central Community Center</MenuItem>
-                      <MenuItem value="station2">North District School</MenuItem>
-                      <MenuItem value="station3">South Library</MenuItem>
-                      <MenuItem value="station4">East City Hall</MenuItem>
+                      {pollingStations.map((station) => (
+                        <MenuItem key={station.id} value={station.id}>
+                          {station.name} - {station.boothNumber}
+                        </MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
                 </Grid>
               </Grid>
-              
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                By proceeding, you confirm that the information above is correct. Providing false information may 
-                result in disqualification from the voting process.
-              </Typography>
             </Box>
           )}
           
           {/* Step 4: Confirmation */}
-          {activeStep === 3 && (
-            <Box sx={{ textAlign: 'center' }}>
-              {loading ? (
-                <Box display="flex" flexDirection="column" alignItems="center" gap={2}>
-                  <CircularProgress size={60} />
-                  <Typography variant="h6">
-                    Processing your verification...
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    This may take a few moments while we securely verify your identity.
+          {activeStep === 3 && verificationResult?.success && (
+            <Box>
+              <Box display="flex" justifyContent="center" mb={4}>
+                <CheckCircleIcon sx={{ fontSize: 60, color: 'success.main' }} />
+              </Box>
+              
+              <Typography variant="h6" gutterBottom align="center">
+                Verification Successful!
+              </Typography>
+              
+              <Paper elevation={2} sx={{ p: 3, maxWidth: 400, mx: 'auto', my: 4 }}>
+                <Typography variant="h6" gutterBottom>
+                  Voter Information
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={5} sx={{ textAlign: 'right', fontWeight: 'bold' }}>
+                    <Typography variant="body2">Name:</Typography>
+                  </Grid>
+                  <Grid item xs={7} sx={{ textAlign: 'left' }}>
+                    <Typography variant="body2">{voterDetails.fullName}</Typography>
+                  </Grid>
+                  
+                  <Grid item xs={5} sx={{ textAlign: 'right', fontWeight: 'bold' }}>
+                    <Typography variant="body2">Voter ID:</Typography>
+                  </Grid>
+                  <Grid item xs={7} sx={{ textAlign: 'left' }}>
+                    <Typography variant="body2">{voterDetails.voterID}</Typography>
+                  </Grid>
+                  
+                  <Grid item xs={5} sx={{ textAlign: 'right', fontWeight: 'bold' }}>
+                    <Typography variant="body2">Polling Station:</Typography>
+                  </Grid>
+                  <Grid item xs={7} sx={{ textAlign: 'left' }}>
+                    <Typography variant="body2">
+                      {voterService.getPollingStation(voterDetails.pollingStationId || '')?.name}
+                    </Typography>
+                  </Grid>
+                  
+                  <Grid item xs={5} sx={{ textAlign: 'right', fontWeight: 'bold' }}>
+                    <Typography variant="body2">Verification ID:</Typography>
+                  </Grid>
+                  <Grid item xs={7} sx={{ textAlign: 'left' }}>
+                    <Typography variant="body2">{verificationId}</Typography>
+                  </Grid>
+                </Grid>
+                
+                <Box mt={3} textAlign="center">
+                  <QRCode
+                    value={verificationId || ''}
+                    size={200}
+                    level="H"
+                    includeMargin={true}
+                  />
+                  <Typography variant="caption" display="block" mt={1}>
+                    Show this QR code at the polling booth
                   </Typography>
                 </Box>
-              ) : (
-                <>
-                  <CheckCircleIcon color="success" sx={{ fontSize: 80, mb: 2 }} />
-                  <Typography variant="h5" gutterBottom>
-                    Verification Successful!
-                  </Typography>
-                  <Typography variant="body1" paragraph>
-                    Congratulations! Your identity has been successfully verified.
-                  </Typography>
-                  
-                  <Paper elevation={2} sx={{ p: 3, maxWidth: 400, mx: 'auto', my: 4 }}>
-                    <Typography variant="h6" gutterBottom>
-                      Voter Information
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={5} sx={{ textAlign: 'right', fontWeight: 'bold' }}>
-                        <Typography variant="body2">Name:</Typography>
-                      </Grid>
-                      <Grid item xs={7} sx={{ textAlign: 'left' }}>
-                        <Typography variant="body2">{voterDetails.fullName}</Typography>
-                      </Grid>
-                      
-                      <Grid item xs={5} sx={{ textAlign: 'right', fontWeight: 'bold' }}>
-                        <Typography variant="body2">Voter ID:</Typography>
-                      </Grid>
-                      <Grid item xs={7} sx={{ textAlign: 'left' }}>
-                        <Typography variant="body2">{voterDetails.voterID}</Typography>
-                      </Grid>
-                      
-                      <Grid item xs={5} sx={{ textAlign: 'right', fontWeight: 'bold' }}>
-                        <Typography variant="body2">Polling Station:</Typography>
-                      </Grid>
-                      <Grid item xs={7} sx={{ textAlign: 'left' }}>
-                        <Typography variant="body2">{voterDetails.pollingStation}</Typography>
-                      </Grid>
-                      
-                      <Grid item xs={5} sx={{ textAlign: 'right', fontWeight: 'bold' }}>
-                        <Typography variant="body2">Verification ID:</Typography>
-                      </Grid>
-                      <Grid item xs={7} sx={{ textAlign: 'left' }}>
-                        <Typography variant="body2">{verificationId}</Typography>
-                      </Grid>
-                    </Grid>
-                    
-                    <Box mt={3} display="flex" justifyContent="center">
-                      {verificationId && (
-                        <QRCode value={verificationId} size={150} />
-                      )}
-                    </Box>
-                  </Paper>
-                  
-                  <Typography variant="body2" color="text.secondary">
-                    Please take a screenshot or save this QR code. Present it at your polling station for 
-                    fast-track verification on election day.
-                  </Typography>
-                  
-                  <Box mt={4}>
-                    <Button 
-                      variant="contained" 
-                      onClick={() => navigate('/')}
-                      sx={{ mx: 1 }}
-                    >
-                      Return Home
-                    </Button>
-                  </Box>
-                </>
-              )}
-            </Box>
-          )}
-          
-          {/* Navigation buttons */}
-          {activeStep < 3 && (
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
-              <Button
-                disabled={activeStep === 0}
-                onClick={handleBack}
-              >
-                Back
-              </Button>
-              <Button
-                variant="contained"
-                onClick={handleNext}
-                disabled={isNextDisabled()}
-              >
-                {activeStep === steps.length - 2 ? 'Submit' : 'Next'}
-              </Button>
+              </Paper>
             </Box>
           )}
         </Box>
+        
+        <Box display="flex" justifyContent="space-between" mt={4}>
+          <Button
+            variant="outlined"
+            onClick={handleBack}
+            disabled={activeStep === 0}
+          >
+            Back
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleNext}
+            disabled={isNextDisabled() || activeStep === steps.length - 1}
+          >
+            {activeStep === steps.length - 1 ? 'Finish' : 'Next'}
+          </Button>
+        </Box>
       </Paper>
       
-      <Box my={4}>
-        <Typography variant="body2" color="text.secondary" align="center">
-          Your security is our priority. All data is encrypted and processed using Google Cloud's secure infrastructure.
+      <Box mb={4} textAlign="center">
+        <Typography variant="body2" color="text.secondary">
+          Powered by Google Cloud Technologies
           <br />
-          This verification system uses advanced AI technology from Google's Gemini API for identity validation.
+          Secure, fast, and reliable voter verification
         </Typography>
       </Box>
+      
+      {selectedPollingStation && (
+        <Box mt={3}>
+          <Typography variant="h6">Polling Station Location</Typography>
+          <PollingStationMap 
+            stationAddress={`${selectedPollingStation.address}, ${selectedPollingStation.district}, ${selectedPollingStation.state}`}
+            stationName={selectedPollingStation.name}
+            userLocation={userLocation}
+          />
+        </Box>
+      )}
     </Container>
   );
 };

@@ -15,7 +15,7 @@ import NotFoundPage from './pages/NotFoundPage';
 import ProfilePage from './pages/ProfilePage';
 import PollingStationPage from './pages/PollingStationPage';
 import BlockchainVerificationPage from './pages/BlockchainVerificationPage';
-import PollingStationMap from './components/PollingStationMap';
+import PollingStationsPage from './pages/PollingStationsPage';
 
 const App: React.FC = () => {
   return (
@@ -51,7 +51,7 @@ const App: React.FC = () => {
               } />
               <Route path="/polling-stations" element={
                 <ProtectedRoute adminOnly>
-                  <PollingStationMap />
+                  <PollingStationsPage />
                 </ProtectedRoute>
               } />
               <Route path="/blockchain-verification" element={

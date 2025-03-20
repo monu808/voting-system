@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -22,7 +22,8 @@ import {
   InputLabel,
   Select,
   Stack,
-  Alert
+  Alert,
+  CircularProgress
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -32,79 +33,101 @@ import {
   LocationOn as LocationOnIcon,
   Search as SearchIcon,
   Download as DownloadIcon,
-  Analytics as AnalyticsIcon
+  Analytics as AnalyticsIcon,
+  Edit as EditIcon
 } from '@mui/icons-material';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import { Chart as ChartJS, registerables } from 'chart.js';
 import { useAuth } from '../contexts/AuthContext';
+import voterService from '../services/voterService';
+import { VoterInfo } from '../services/voterService';
 
 // Register ChartJS components
 ChartJS.register(...registerables);
 
-// Mock data
-const mockVerificationStats = {
-  total: 12583,
-  successful: 11845,
-  failed: 738,
-  pending: 189,
-};
-
-const mockPollingStations = [
-  { id: 'ps1', name: 'Central Community Center', total: 3245, successful: 3102, failed: 143 },
-  { id: 'ps2', name: 'North District School', total: 2890, successful: 2712, failed: 178 },
-  { id: 'ps3', name: 'South Library', total: 3125, successful: 2987, failed: 138 },
-  { id: 'ps4', name: 'East City Hall', total: 3323, successful: 3044, failed: 279 },
-];
-
-const mockRecentVerifications = [
-  { id: 'v123456', voterName: 'John Smith', station: 'Central Community Center', status: 'success', time: '10:15 AM' },
-  { id: 'v123457', voterName: 'Maria Garcia', station: 'North District School', status: 'failed', time: '10:14 AM' },
-  { id: 'v123458', voterName: 'David Chen', station: 'South Library', status: 'success', time: '10:12 AM' },
-  { id: 'v123459', voterName: 'Sarah Johnson', station: 'East City Hall', status: 'success', time: '10:10 AM' },
-  { id: 'v123460', voterName: 'Ali Patel', station: 'Central Community Center', status: 'success', time: '10:08 AM' },
-];
-
-const mockHourlyVerifications = [
-  { hour: '7 AM', count: 345 },
-  { hour: '8 AM', count: 782 },
-  { hour: '9 AM', count: 1253 },
-  { hour: '10 AM', count: 1845 },
-  { hour: '11 AM', count: 0 }, // Future hours
-  { hour: '12 PM', count: 0 },
-  { hour: '1 PM', count: 0 },
-  { hour: '2 PM', count: 0 },
-  { hour: '3 PM', count: 0 },
-  { hour: '4 PM', count: 0 },
-  { hour: '5 PM', count: 0 },
-  { hour: '6 PM', count: 0 },
-  { hour: '7 PM', count: 0 },
-];
-
 const AdminDashboard: React.FC = () => {
-  const { /* currentUser removed */ } = useAuth();
+  const { currentUser } = useAuth();
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStation, setSelectedStation] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  // Data for verification status chart
+  // Add state for real-time data
+  const [pollingStations, setPollingStations] = useState<any[]>([]);
+  const [voters, setVoters] = useState<VoterInfo[]>([]);
+  const [verificationStats, setVerificationStats] = useState({
+    total: 0,
+    successful: 0,
+    failed: 0,
+    pending: 0
+  });
+  
+  // Subscribe to real-time data
+  useEffect(() => {
+    setLoading(true);
+    
+    // Subscribe to polling stations
+    const unsubscribeStations = voterService.subscribeToAllPollingStations((stations) => {
+      setPollingStations(stations);
+      
+      // Calculate statistics
+      const stats = {
+        total: stations.reduce((sum, station) => sum + (station.totalVerifications || 0), 0),
+        successful: stations.reduce((sum, station) => sum + (station.successfulVerifications || 0), 0),
+        failed: stations.reduce((sum, station) => sum + (station.failedVerifications || 0), 0),
+        pending: 0 // Will be calculated from voters
+      };
+      
+      setVerificationStats(prevStats => ({...prevStats, ...stats}));
+      setLoading(false);
+      setLastUpdated(new Date());
+    });
+    
+    // Subscribe to voters
+    const unsubscribeVoters = voterService.subscribeToVoters((allVoters) => {
+      setVoters(allVoters);
+      
+      // Calculate pending verifications
+      const pendingCount = allVoters.filter(v => v.verificationStatus === 'pending').length;
+      setVerificationStats(prevStats => ({...prevStats, pending: pendingCount}));
+    });
+    
+    return () => {
+      unsubscribeStations();
+      unsubscribeVoters();
+    };
+  }, []);
+  
+  // Data for verification status chart (using real-time data)
   const verificationStatusData = {
     labels: ['Successful', 'Failed', 'Pending'],
     datasets: [
       {
-        data: [mockVerificationStats.successful, mockVerificationStats.failed, mockVerificationStats.pending],
+        data: [verificationStats.successful, verificationStats.failed, verificationStats.pending],
         backgroundColor: ['#34a853', '#ea4335', '#fbbc04'],
         hoverBackgroundColor: ['#2a8644', '#c0392b', '#daa520'],
       },
     ],
   };
   
+  // Generate hourly verification data (mock for now)
+  const hourlyVerifications = Array.from({ length: 14 }, (_, i) => {
+    const hour = (i + 7) % 24; // Start from 7 AM
+    const hourLabel = `${hour}:00`;
+    return {
+      hour: hourLabel,
+      count: Math.floor(Math.random() * 1000) // This would come from real-time data in production
+    };
+  });
+  
   // Data for hourly verification chart
   const hourlyVerificationData = {
-    labels: mockHourlyVerifications.map(item => item.hour),
+    labels: hourlyVerifications.map(item => item.hour),
     datasets: [
       {
         label: 'Verifications',
-        data: mockHourlyVerifications.map(item => item.count),
+        data: hourlyVerifications.map(item => item.count),
         fill: true,
         backgroundColor: 'rgba(66, 133, 244, 0.2)',
         borderColor: '#4285f4',
@@ -115,33 +138,28 @@ const AdminDashboard: React.FC = () => {
   
   // Data for polling station chart
   const pollingStationData = {
-    labels: mockPollingStations.map(station => station.name),
+    labels: pollingStations.map(station => station.name),
     datasets: [
       {
         label: 'Successful',
-        data: mockPollingStations.map(station => station.successful),
+        data: pollingStations.map(station => station.successfulVerifications || 0),
         backgroundColor: '#34a853',
       },
       {
         label: 'Failed',
-        data: mockPollingStations.map(station => station.failed),
+        data: pollingStations.map(station => station.failedVerifications || 0),
         backgroundColor: '#ea4335',
       },
     ],
   };
   
-  // Simulate refresh data
-  const refreshData = () => {
-    setLastUpdated(new Date());
-  };
-  
-  // Filter recent verifications based on search and station filter
-  const filteredVerifications = mockRecentVerifications.filter(verification => {
+  // Filter voters based on search and selected station
+  const filteredVoters = voters.filter(voter => {
     const matchesSearch = searchQuery === '' || 
-      verification.voterName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      verification.id.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesStation = selectedStation === 'all' || verification.station === selectedStation;
+      voter.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      voter.voterID.toLowerCase().includes(searchQuery.toLowerCase());
+      
+    const matchesStation = selectedStation === 'all' || voter.pollingStationId === selectedStation;
     
     return matchesSearch && matchesStation;
   });
@@ -149,273 +167,249 @@ const AdminDashboard: React.FC = () => {
   const handleAnalyticsNavigation = (section: string) => {
     // Add navigation logic here
   };
-
+  
   return (
-    <Container maxWidth="xl">
-      <Box mb={4}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Admin Dashboard
-        </Typography>
-        <Typography variant="subtitle1" color="text.secondary">
-          Monitor voter verification status and performance metrics
+    <Container maxWidth="lg">
+      <Box sx={{ mb: 4 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+          <Typography variant="h4" component="h1">
+            Admin Dashboard
+          </Typography>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={() => {/* Add refresh functionality */}}
+            disabled={loading}
+          >
+            Refresh Data
+          </Button>
+        </Box>
+        
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+        
+        <Typography variant="body2" color="text.secondary">
+          Last updated: {lastUpdated.toLocaleString()}
         </Typography>
       </Box>
       
-      {/* Alert for system status */}
-      <Alert severity="success" sx={{ mb: 4 }}>
-        All verification systems are functioning normally. Last updated at {lastUpdated.toLocaleTimeString()}.
-        <IconButton 
-          size="small" 
-          onClick={refreshData} 
-          sx={{ ml: 2 }}
-          aria-label="refresh data"
-        >
-          <RefreshIcon />
-        </IconButton>
-      </Alert>
-      
-      {/* Dashboard overview cards */}
-      <Grid container spacing={3} mb={4}>
+      {/* Stats Cards */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center">
-                <Box>
-                  <Typography color="text.secondary" variant="body2">
-                    Total Verifications
-                  </Typography>
-                  <Typography variant="h4" component="div">
-                    {mockVerificationStats.total.toLocaleString()}
-                  </Typography>
-                </Box>
-                <PeopleIcon fontSize="large" color="primary" />
+              <Box display="flex" alignItems="center" mb={1}>
+                <PeopleIcon color="primary" sx={{ mr: 1 }} />
+                <Typography variant="h6">Total Verifications</Typography>
               </Box>
+              <Typography variant="h4">{verificationStats.total}</Typography>
             </CardContent>
           </Card>
         </Grid>
-        
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center">
-                <Box>
-                  <Typography color="text.secondary" variant="body2">
-                    Successful
-                  </Typography>
-                  <Typography variant="h4" component="div" color="success.main">
-                    {mockVerificationStats.successful.toLocaleString()}
-                  </Typography>
-                </Box>
-                <CheckCircleIcon fontSize="large" color="success" />
+              <Box display="flex" alignItems="center" mb={1}>
+                <CheckCircleIcon color="success" sx={{ mr: 1 }} />
+                <Typography variant="h6">Successful</Typography>
               </Box>
+              <Typography variant="h4">{verificationStats.successful}</Typography>
             </CardContent>
           </Card>
         </Grid>
-        
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center">
-                <Box>
-                  <Typography color="text.secondary" variant="body2">
-                    Failed
-                  </Typography>
-                  <Typography variant="h4" component="div" color="error.main">
-                    {mockVerificationStats.failed.toLocaleString()}
-                  </Typography>
-                </Box>
-                <ErrorIcon fontSize="large" color="error" />
+              <Box display="flex" alignItems="center" mb={1}>
+                <ErrorIcon color="error" sx={{ mr: 1 }} />
+                <Typography variant="h6">Failed</Typography>
               </Box>
+              <Typography variant="h4">{verificationStats.failed}</Typography>
             </CardContent>
           </Card>
         </Grid>
-        
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center">
-                <Box>
-                  <Typography color="text.secondary" variant="body2">
-                    Polling Stations
-                  </Typography>
-                  <Typography variant="h4" component="div">
-                    {mockPollingStations.length}
-                  </Typography>
-                </Box>
-                <LocationOnIcon fontSize="large" color="primary" />
+              <Box display="flex" alignItems="center" mb={1}>
+                <LocationOnIcon color="info" sx={{ mr: 1 }} />
+                <Typography variant="h6">Active Stations</Typography>
               </Box>
+              <Typography variant="h4">
+                {pollingStations.filter(s => s.status === 'operational').length}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
       
       {/* Charts */}
-      <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Hourly Verification Volume
-            </Typography>
-            <Typography variant="body2" color="text.secondary" paragraph>
-              Number of verifications processed each hour
-            </Typography>
-            <Box height={300}>
-              <Line data={hourlyVerificationData} options={{ maintainAspectRatio: false }} />
-            </Box>
-          </Paper>
-        </Grid>
-        
-        <Grid item xs={12} md={4}>
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
               Verification Status
             </Typography>
-            <Typography variant="body2" color="text.secondary" paragraph>
-              Distribution of verification outcomes
-            </Typography>
-            <Box height={300} display="flex" justifyContent="center">
-              <Doughnut data={verificationStatusData} options={{ maintainAspectRatio: false }} />
+            <Box sx={{ height: 300 }}>
+              <Doughnut data={verificationStatusData} />
             </Box>
           </Paper>
         </Grid>
-        
-        <Grid item xs={12}>
+        <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
-              Verification by Polling Station
+              Hourly Verifications
             </Typography>
-            <Typography variant="body2" color="text.secondary" paragraph>
-              Successful and failed verifications at each polling station
-            </Typography>
-            <Box height={300}>
-              <Bar 
-                data={pollingStationData} 
-                options={{ 
-                  maintainAspectRatio: false,
-                  scales: {
-                    x: { stacked: true },
-                    y: { stacked: false }
-                  }
-                }} 
-              />
+            <Box sx={{ height: 300 }}>
+              <Line data={hourlyVerificationData} />
             </Box>
           </Paper>
         </Grid>
       </Grid>
       
-      {/* Recent verifications table */}
-      <Paper sx={{ p: 3, mb: 4 }}>
+      {/* Polling Stations Table */}
+      <Paper sx={{ p: 3 }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
           <Typography variant="h6">
-            Recent Verifications
+            Polling Stations
           </Typography>
-          
-          <Stack direction="row" spacing={2}>
-            <FormControl sx={{ minWidth: 200 }} size="small">
-              <InputLabel id="station-filter-label">Polling Station</InputLabel>
-              <Select
-                labelId="station-filter-label"
-                id="station-filter"
-                value={selectedStation}
-                label="Polling Station"
-                onChange={(e) => setSelectedStation(e.target.value)}
-              >
-                <MenuItem value="all">All Stations</MenuItem>
-                {mockPollingStations.map(station => (
-                  <MenuItem key={station.id} value={station.name}>{station.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            
+          <Box display="flex" gap={2}>
             <TextField
               size="small"
-              label="Search"
-              variant="outlined"
+              placeholder="Search stations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               InputProps={{
-                endAdornment: <SearchIcon />
+                startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
               }}
             />
-            
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <InputLabel>Filter by Status</InputLabel>
+              <Select
+                value={selectedStation}
+                label="Filter by Status"
+                onChange={(e) => setSelectedStation(e.target.value)}
+              >
+                <MenuItem value="all">All Stations</MenuItem>
+                <MenuItem value="operational">Operational</MenuItem>
+                <MenuItem value="issue">Issues</MenuItem>
+                <MenuItem value="closed">Closed</MenuItem>
+              </Select>
+            </FormControl>
             <Button
-              startIcon={<DownloadIcon />}
               variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={() => {/* Add export functionality */}}
             >
               Export
             </Button>
-          </Stack>
+          </Box>
         </Box>
         
         <TableContainer>
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Verification ID</TableCell>
-                <TableCell>Voter Name</TableCell>
-                <TableCell>Polling Station</TableCell>
+                <TableCell>Station Name</TableCell>
+                <TableCell>Booth Number</TableCell>
+                <TableCell>District</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell>Time</TableCell>
-                <TableCell align="right">Actions</TableCell>
+                <TableCell>Verification Rate</TableCell>
+                <TableCell>Total Verifications</TableCell>
+                <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredVerifications.length > 0 ? (
-                filteredVerifications.map((verification) => (
-                  <TableRow key={verification.id}>
-                    <TableCell>{verification.id}</TableCell>
-                    <TableCell>{verification.voterName}</TableCell>
-                    <TableCell>{verification.station}</TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={verification.status === 'success' ? 'Successful' : 'Failed'}
-                        color={verification.status === 'success' ? 'success' : 'error'}
+              {pollingStations.map((station) => (
+                <TableRow key={station.id}>
+                  <TableCell>{station.name}</TableCell>
+                  <TableCell>{station.boothNumber}</TableCell>
+                  <TableCell>{station.district}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={station.status}
+                      color={
+                        station.status === 'operational' ? 'success' :
+                        station.status === 'issue' ? 'warning' : 'error'
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>{station.verificationRate?.toFixed(1)}%</TableCell>
+                  <TableCell>{station.totalVerifications}</TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={1}>
+                      <IconButton
                         size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{verification.time}</TableCell>
-                    <TableCell align="right">
-                      <Button size="small">View Details</Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    No verifications found matching your search criteria.
+                        onClick={() => handleAnalyticsNavigation(station.id)}
+                      >
+                        <AnalyticsIcon />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => {/* Add edit functionality */}}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                    </Stack>
                   </TableCell>
                 </TableRow>
-              )}
+              ))}
             </TableBody>
           </Table>
         </TableContainer>
       </Paper>
       
-      <Box sx={{ mb: 3 }}>
-        <Stack direction="row" spacing={2}>
-          <Button
-            variant="outlined"
-            startIcon={<AnalyticsIcon />}
-            onClick={() => handleAnalyticsNavigation('verification-stats')}
-          >
-            Verification Analytics
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<LocationOnIcon />}
-            onClick={() => handleAnalyticsNavigation('station-stats')}
-          >
-            Station Analytics
-          </Button>
-        </Stack>
-      </Box>
-      
-      <Box mb={4} textAlign="center">
-        <Typography variant="body2" color="text.secondary">
-          This dashboard is powered by Google Cloud Analytics and Firebase Realtime Database.
-          <br />
-          It provides secure, real-time monitoring of the voter verification process.
+      {/* Voter Verification Status Table */}
+      <Box mt={4}>
+        <Typography variant="h5" gutterBottom>
+          Voter Verification Status
         </Typography>
+        {loading ? (
+          <CircularProgress />
+        ) : (
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Voter ID</TableCell>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Polling Station</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Verification Date</TableCell>
+                  <TableCell>Method</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredVoters.map((voter) => {
+                  const station = pollingStations.find(s => s.id === voter.pollingStationId);
+                  return (
+                    <TableRow key={voter.id}>
+                      <TableCell>{voter.voterID}</TableCell>
+                      <TableCell>{voter.fullName}</TableCell>
+                      <TableCell>{station ? station.name : 'Unknown'}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={voter.verificationStatus}
+                          color={
+                            voter.verificationStatus === 'verified' ? 'success' :
+                            voter.verificationStatus === 'failed' ? 'error' : 'warning'
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {voter.verificationDate ? new Date(voter.verificationDate.seconds * 1000).toLocaleString() : 'N/A'}
+                      </TableCell>
+                      <TableCell>{voter.verificationMethod || 'N/A'}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
       </Box>
     </Container>
   );
