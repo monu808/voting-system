@@ -70,8 +70,13 @@ const Header: React.FC = () => {
   const navItems = [
     { label: 'Home', path: '/', requiredAuth: false },
     { label: 'Verification', path: '/verification', requiredAuth: true },
-    { label: 'Dashboard', path: '/admin', requiredAuth: true, adminOnly: true }
+    { label: 'Dashboard', path: '/admin', requiredAuth: true, adminOnly: true },
+    { label: 'Polling Stations', path: '/polling-stations', requiredAuth: true, adminOnly: true },
+    { label: 'Blockchain', path: '/blockchain-verification', requiredAuth: true, adminOnly: true }
   ];
+
+  // Add this console log to debug
+  console.log('Current user role:', userRole);
 
   return (
     <AppBar position="sticky">
@@ -126,10 +131,8 @@ const Header: React.FC = () => {
               }}
             >
               {navItems.map((item) => {
-                // Skip admin-only items for non-admin users
+                // Same logic as desktop menu
                 if (item.adminOnly && userRole !== 'admin') return null;
-                
-                // Skip items requiring auth for non-auth users
                 if (item.requiredAuth && !currentUser) return null;
                 
                 return (
@@ -140,7 +143,7 @@ const Header: React.FC = () => {
                       navigate(item.path);
                     }}
                   >
-                    <Typography textAlign="center">{item.label}</Typography>
+                    {item.label}
                   </MenuItem>
                 );
               })}
@@ -169,8 +172,10 @@ const Header: React.FC = () => {
           {/* Desktop navigation */}
           <Box sx={{ flexGrow: 1, display: { xs: 'none', md: 'flex' } }}>
             {navItems.map((item) => {
-              // Skip admin-only items for non-admin users
-              if (item.adminOnly && userRole !== 'admin') return null;
+              // Skip admin items if user is not admin
+              if (item.adminOnly && userRole !== 'admin') {
+                return null;
+              }
               
               // Skip items requiring auth for non-auth users
               if (item.requiredAuth && !currentUser) return null;

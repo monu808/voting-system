@@ -1,102 +1,71 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import { ThemeProvider, CssBaseline } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
-
-// Pages
+import theme from './theme';
+import Header from './components/Header';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 import VerificationPage from './pages/VerificationPage';
 import AdminDashboard from './pages/AdminDashboard';
-import PollingStationPage from './pages/PollingStationPage';
-import NotFoundPage from './pages/NotFoundPage';
-
-// Components
 import ProtectedRoute from './components/ProtectedRoute';
-import Layout from './components/Layout';
+import { AnalyticsProvider } from './contexts/AnalyticsContext';
+import NotFoundPage from './pages/NotFoundPage';
+import ProfilePage from './pages/ProfilePage';
+import PollingStationPage from './pages/PollingStationPage';
+import BlockchainVerificationPage from './pages/BlockchainVerificationPage';
+import PollingStationMap from './components/PollingStationMap';
 
-// Create a theme instance
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1a73e8', // Google blue
-      light: '#4285f4',
-      dark: '#0d47a1',
-    },
-    secondary: {
-      main: '#34a853', // Google green
-      light: '#4caf50',
-      dark: '#1b5e20',
-    },
-    error: {
-      main: '#ea4335', // Google red
-    },
-    warning: {
-      main: '#fbbc04', // Google yellow
-    },
-    background: {
-      default: '#f5f5f5',
-      paper: '#ffffff',
-    },
-  },
-  typography: {
-    fontFamily: '"Google Sans", "Roboto", "Arial", sans-serif',
-    h1: {
-      fontWeight: 500,
-    },
-    h2: {
-      fontWeight: 500,
-    },
-    h3: {
-      fontWeight: 500,
-    },
-    h4: {
-      fontWeight: 500,
-    },
-    h5: {
-      fontWeight: 500,
-    },
-    h6: {
-      fontWeight: 500,
-    },
-  },
-  shape: {
-    borderRadius: 8,
-  },
-});
-
-function App() {
+const App: React.FC = () => {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        <Router>
-          <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<HomePage />} />
-              <Route path="login" element={<LoginPage />} />
-              <Route path="verification" element={
+        <AnalyticsProvider>
+          <Router>
+            <Header />
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/verification" element={
                 <ProtectedRoute>
                   <VerificationPage />
                 </ProtectedRoute>
               } />
-              <Route path="admin" element={
+              <Route path="/admin" element={
                 <ProtectedRoute adminOnly>
                   <AdminDashboard />
                 </ProtectedRoute>
               } />
-              <Route path="polling-station/:id" element={
+              <Route path="/profile" element={
                 <ProtectedRoute>
+                  <ProfilePage />
+                </ProtectedRoute>
+              } />
+              <Route path="/polling-stations/:stationId" element={
+                <ProtectedRoute adminOnly>
                   <PollingStationPage />
                 </ProtectedRoute>
               } />
+              <Route path="/polling-stations" element={
+                <ProtectedRoute adminOnly>
+                  <PollingStationMap />
+                </ProtectedRoute>
+              } />
+              <Route path="/blockchain-verification" element={
+                <ProtectedRoute adminOnly>
+                  <BlockchainVerificationPage />
+                </ProtectedRoute>
+              } />
               <Route path="*" element={<NotFoundPage />} />
-            </Route>
-          </Routes>
-        </Router>
+            </Routes>
+          </Router>
+        </AnalyticsProvider>
       </AuthProvider>
     </ThemeProvider>
   );
-}
+};
 
 export default App; 

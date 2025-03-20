@@ -8,10 +8,8 @@ import {
   Grid,
   Card,
   CardContent,
-  CardMedia,
   Stack,
-  Paper,
-  Divider
+  Paper
 } from '@mui/material';
 import {
   Speed as SpeedIcon,

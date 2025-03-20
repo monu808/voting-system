@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Container,
@@ -7,8 +7,6 @@ import {
   Grid,
   Card,
   CardContent,
-  CardHeader,
-  Divider,
   Table,
   TableBody,
   TableCell,
@@ -33,7 +31,8 @@ import {
   Error as ErrorIcon,
   LocationOn as LocationOnIcon,
   Search as SearchIcon,
-  Download as DownloadIcon
+  Download as DownloadIcon,
+  Analytics as AnalyticsIcon
 } from '@mui/icons-material';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import { Chart as ChartJS, registerables } from 'chart.js';
@@ -82,7 +81,7 @@ const mockHourlyVerifications = [
 ];
 
 const AdminDashboard: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { /* currentUser removed */ } = useAuth();
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStation, setSelectedStation] = useState('all');
@@ -147,6 +146,10 @@ const AdminDashboard: React.FC = () => {
     return matchesSearch && matchesStation;
   });
   
+  const handleAnalyticsNavigation = (section: string) => {
+    // Add navigation logic here
+  };
+
   return (
     <Container maxWidth="xl">
       <Box mb={4}>
@@ -387,6 +390,25 @@ const AdminDashboard: React.FC = () => {
           </Table>
         </TableContainer>
       </Paper>
+      
+      <Box sx={{ mb: 3 }}>
+        <Stack direction="row" spacing={2}>
+          <Button
+            variant="outlined"
+            startIcon={<AnalyticsIcon />}
+            onClick={() => handleAnalyticsNavigation('verification-stats')}
+          >
+            Verification Analytics
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<LocationOnIcon />}
+            onClick={() => handleAnalyticsNavigation('station-stats')}
+          >
+            Station Analytics
+          </Button>
+        </Stack>
+      </Box>
       
       <Box mb={4} textAlign="center">
         <Typography variant="body2" color="text.secondary">

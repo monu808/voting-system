@@ -129,27 +129,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Listen for auth state changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
-      
-      // In a real app, you would fetch the user's role from Firestore or 
-      // another database here. For now, we'll assign admin role based on email.
       if (user) {
-        // This is just a simple example. In a real app, you would check
-        // the user's role in a database like Firestore.
-        if (user.email && user.email.endsWith('@admin.com')) {
-          setUserRole('admin');
-        } else {
-          setUserRole('voter');
-        }
+        // Determine user role based on email
+        const email = user.email || '';
+        // Only set admin for specific admin emails or test accounts
+        const adminEmails = ['admin@example.com', 'admin@admin.com', 'test@test.com'];
+        const isAdmin = adminEmails.includes(email);
+        setUserRole(isAdmin ? 'admin' : 'user');
       } else {
         setUserRole(null);
       }
-      
       setLoading(false);
     });
 
-    return unsubscribe;
+    return () => unsubscribe();
   }, []);
 
   const value = {

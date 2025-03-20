@@ -35,5 +35,42 @@ firebase-debug.*.log*
 # Google Cloud
 .gcloud/
 *.log
+credentials.json
+service-account.json
+
+# ML Kit
+*.tflite
+*.pb
+*.h5
+mlkit_models/
+
+# Android
+*.apk
+*.aab
+android/app/build/
+android/build/
+
+# iOS
+ios/Pods/
+ios/build/
+*.xcworkspace
+*.xcuserdata
+
+# Blockchain
+*.pem
+*.key
+blockchain/keystore/
+
+# Security
+*.p12
+*.pfx
+*.crt
+*.key
+*.pem
+
+# Local development
+local/
+temp/
+cache/
 
 node_modules

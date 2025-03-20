@@ -22,8 +22,6 @@ import { styled } from '@mui/material/styles';
 import {
   PhotoCamera as PhotoCameraIcon,
   Upload as UploadIcon,
-  QrCodeScanner as QrCodeScannerIcon,
-  Verified as VerifiedIcon,
   CheckCircle as CheckCircleIcon
 } from '@mui/icons-material';
 import Webcam from 'react-webcam';

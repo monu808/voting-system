@@ -6,8 +6,11 @@
     "@emotion/react": "^11.11.0",
     "@emotion/styled": "^11.11.0",
     "@google-cloud/vision": "^4.0.1",
+    "@google/generative-ai": "^0.24.0",
+    "@googlemaps/google-maps-services-js": "^3.4.0",
     "@mui/icons-material": "^5.14.0",
     "@mui/material": "^5.14.0",
+    "@react-google-maps/api": "^2.20.6",
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
@@ -17,6 +20,7 @@
     "@types/react-dom": "^18.2.0",
     "axios": "^1.4.0",
     "chart.js": "^4.3.0",
+    "ethers": "^6.13.5",
     "firebase": "^10.0.0",
     "qrcode.react": "^3.1.0",
     "react": "^18.2.0",
@@ -52,4 +56,4 @@
       "last 1 safari version"
     ]
   }
-} 
+}

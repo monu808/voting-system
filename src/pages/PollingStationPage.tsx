@@ -33,7 +33,6 @@ import {
   ArrowBack as ArrowBackIcon,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { useAuth } from '../contexts/AuthContext';
 
 // Mock polling station data
 const mockStationData = {
@@ -149,14 +148,13 @@ function TabPanel(props: TabPanelProps) {
 const PollingStationPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stationData, setStationData] = useState<any>(null);
   const [tabValue, setTabValue] = useState(0);
   const [queueData, setQueueData] = useState(mockQueueData);
-  const [recentVerifications, setRecentVerifications] = useState(mockRecentVerifications);
+  const [recentVerifications] = useState(mockRecentVerifications);
   
   // Handle tab change
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {

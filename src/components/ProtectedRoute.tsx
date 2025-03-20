@@ -1,6 +1,7 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { CircularProgress, Box } from '@mui/material';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -11,24 +12,27 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children, 
   adminOnly = false 
 }) => {
-  const { currentUser, loading, userRole } = useAuth();
+  const { currentUser, userRole, loading } = useAuth();
+  const location = useLocation();
 
-  // If still loading auth state, render nothing
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+        <CircularProgress />
+      </Box>
+    );
   }
 
-  // If not authenticated, redirect to login
   if (!currentUser) {
-    return <Navigate to="/login" replace />;
+    // Redirect to login but save the attempted location
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If admin only and user is not admin, redirect to homepage
   if (adminOnly && userRole !== 'admin') {
+    // Redirect to home if admin access is required but user is not an admin
     return <Navigate to="/" replace />;
   }
 
-  // Otherwise, render the protected component
   return <>{children}</>;
 };
 
