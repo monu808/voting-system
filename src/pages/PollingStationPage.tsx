@@ -33,91 +33,12 @@ import {
   ArrowBack as ArrowBackIcon,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
+import voterService, { VoterInfo } from '../services/voterService';
+import { PollingStation } from '../types/pollingStation';
+import { Timestamp } from 'firebase/firestore';
 
-// Mock polling station data
-const mockStationData = {
-  'ps1': {
-    id: 'ps1',
-    name: 'Central Community Center',
-    address: '123 Main Street, Cityville',
-    totalVerifications: 3245,
-    successfulVerifications: 3102,
-    failedVerifications: 143,
-    verificationRate: 95.6,
-    status: 'operational',
-    staff: [
-      { id: 'staff1', name: 'Emma Wilson', role: 'Station Manager', status: 'active' },
-      { id: 'staff2', name: 'Michael Brown', role: 'Verification Officer', status: 'active' },
-      { id: 'staff3', name: 'Sophia Lee', role: 'Verification Officer', status: 'break' }
-    ]
-  },
-  'ps2': {
-    id: 'ps2',
-    name: 'North District School',
-    address: '456 Oak Avenue, Townsburg',
-    totalVerifications: 2890,
-    successfulVerifications: 2712,
-    failedVerifications: 178,
-    verificationRate: 93.8,
-    status: 'operational',
-    staff: [
-      { id: 'staff4', name: 'James Johnson', role: 'Station Manager', status: 'active' },
-      { id: 'staff5', name: 'Emily Davis', role: 'Verification Officer', status: 'active' },
-      { id: 'staff6', name: 'Daniel Martinez', role: 'Verification Officer', status: 'active' }
-    ]
-  },
-  'ps3': {
-    id: 'ps3',
-    name: 'South Library',
-    address: '789 Pine Boulevard, Villageton',
-    totalVerifications: 3125,
-    successfulVerifications: 2987,
-    failedVerifications: 138,
-    verificationRate: 95.6,
-    status: 'operational',
-    staff: [
-      { id: 'staff7', name: 'Olivia Taylor', role: 'Station Manager', status: 'active' },
-      { id: 'staff8', name: 'William Anderson', role: 'Verification Officer', status: 'active' },
-      { id: 'staff9', name: 'Ava Thomas', role: 'Verification Officer', status: 'active' }
-    ]
-  },
-  'ps4': {
-    id: 'ps4',
-    name: 'East City Hall',
-    address: '101 Elm Street, Metropolis',
-    totalVerifications: 3323,
-    successfulVerifications: 3044,
-    failedVerifications: 279,
-    verificationRate: 91.6,
-    status: 'issue',
-    staff: [
-      { id: 'staff10', name: 'Noah Harris', role: 'Station Manager', status: 'active' },
-      { id: 'staff11', name: 'Isabella Clark', role: 'Verification Officer', status: 'active' },
-      { id: 'staff12', name: 'Mason Lewis', role: 'Verification Officer', status: 'inactive' }
-    ]
-  }
-};
-
-// Mock queue data
-const mockQueueData = [
-  { id: 'v5431', name: 'Sarah Johnson', status: 'waiting', position: 1, waitTime: '~2 min' },
-  { id: 'v5432', name: 'Robert Chen', status: 'waiting', position: 2, waitTime: '~5 min' },
-  { id: 'v5433', name: 'Maria Rodriguez', status: 'waiting', position: 3, waitTime: '~8 min' },
-  { id: 'v5434', name: 'James Wilson', status: 'processing', position: 0, waitTime: 'Now' },
-  { id: 'v5435', name: 'Emily Davis', status: 'processing', position: 0, waitTime: 'Now' }
-];
-
-// Mock recent verification data
-const mockRecentVerifications = [
-  { id: 'v5430', name: 'John Smith', status: 'success', timestamp: '10:45 AM', verifiedBy: 'Michael Brown' },
-  { id: 'v5429', name: 'Linda Parker', status: 'failed', timestamp: '10:42 AM', verifiedBy: 'Sophia Lee', reason: 'ID document expired' },
-  { id: 'v5428', name: 'David Miller', status: 'success', timestamp: '10:38 AM', verifiedBy: 'Michael Brown' },
-  { id: 'v5427', name: 'Jennifer White', status: 'success', timestamp: '10:36 AM', verifiedBy: 'Sophia Lee' },
-  { id: 'v5426', name: 'Mohammed Al-Farsi', status: 'success', timestamp: '10:33 AM', verifiedBy: 'Michael Brown' },
-  { id: 'v5425', name: 'Patricia Thompson', status: 'failed', timestamp: '10:30 AM', verifiedBy: 'Michael Brown', reason: 'Facial verification failed' },
-  { id: 'v5424', name: 'Richard Harris', status: 'success', timestamp: '10:28 AM', verifiedBy: 'Sophia Lee' },
-  { id: 'v5423', name: 'Susan Martinez', status: 'success', timestamp: '10:25 AM', verifiedBy: 'Michael Brown' }
-];
+// Remove mock data declarations
+// Mock polling station data, mock queue data, and mock recent verification data
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -151,10 +72,11 @@ const PollingStationPage: React.FC = () => {
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [stationData, setStationData] = useState<any>(null);
+  const [stationData, setStationData] = useState<PollingStation | null>(null);
   const [tabValue, setTabValue] = useState(0);
-  const [queueData, setQueueData] = useState(mockQueueData);
-  const [recentVerifications] = useState(mockRecentVerifications);
+  const [voters, setVoters] = useState<VoterInfo[]>([]);
+  const [queueData, setQueueData] = useState<VoterInfo[]>([]);
+  const [recentVerifications, setRecentVerifications] = useState<VoterInfo[]>([]);
   
   // Handle tab change
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -163,24 +85,78 @@ const PollingStationPage: React.FC = () => {
   
   // Load polling station data
   useEffect(() => {
-    // Simulate API call to fetch polling station data
-    setLoading(true);
-    setError(null);
+    if (!id) {
+      setError('Invalid polling station ID');
+      setLoading(false);
+      return;
+    }
     
-    setTimeout(() => {
-      if (id && mockStationData[id as keyof typeof mockStationData]) {
-        setStationData(mockStationData[id as keyof typeof mockStationData]);
-        setLoading(false);
-      } else {
-        setError('Polling station not found');
-        setLoading(false);
-      }
-    }, 1000);
+    // Get polling station by ID
+    const station = voterService.getPollingStationById(id);
+    
+    if (station) {
+      setStationData(station);
+      setLoading(false);
+      
+      // Subscribe to real-time voter data for this station
+      const unsubscribe = voterService.subscribeToVoters((allVoters) => {
+        // Filter voters for this station
+        const stationVoters = allVoters.filter(v => v.pollingStationId === id);
+        
+        // Set all voters for this station
+        setVoters(stationVoters);
+        
+        // Set waiting voters (pending verification)
+        const waiting = stationVoters.filter(v => v.verificationStatus === 'pending')
+          .sort((a, b) => a.voterID.localeCompare(b.voterID))
+          .slice(0, 5); // Show only first 5
+        setQueueData(waiting);
+        
+        // Set recently verified voters
+        const verified = stationVoters.filter(v => v.verificationStatus !== 'pending')
+          .sort((a, b) => {
+            // Sort by verification date, most recent first
+            if (!a.verificationDate) return 1;
+            if (!b.verificationDate) return -1;
+            
+            let dateA: Date;
+            let dateB: Date;
+            
+            if (a.verificationDate instanceof Timestamp) {
+              dateA = a.verificationDate.toDate();
+            } else if (typeof a.verificationDate === 'object' && 'seconds' in a.verificationDate) {
+              dateA = new Date((a.verificationDate as any).seconds * 1000);
+            } else {
+              dateA = new Date(a.verificationDate as any);
+            }
+            
+            if (b.verificationDate instanceof Timestamp) {
+              dateB = b.verificationDate.toDate();
+            } else if (typeof b.verificationDate === 'object' && 'seconds' in b.verificationDate) {
+              dateB = new Date((b.verificationDate as any).seconds * 1000);
+            } else {
+              dateB = new Date(b.verificationDate as any);
+            }
+            
+            return dateB.getTime() - dateA.getTime();
+          })
+          .slice(0, 8); // Show only first 8
+        setRecentVerifications(verified);
+      });
+      
+      // Clean up subscription
+      return () => unsubscribe();
+    } else {
+      setError('Polling station not found');
+      setLoading(false);
+    }
   }, [id]);
   
-  // Simulate refreshing the queue
+  // Refresh function to update queue with latest data
   const refreshQueue = () => {
-    setQueueData([...queueData].sort(() => Math.random() - 0.5));
+    // No need to manually refresh as we're using real-time data
+    // Just show a notification that data is always real-time
+    alert('Queue data is already real-time and will update automatically');
   };
   
   if (loading) {
@@ -298,7 +274,7 @@ const PollingStationPage: React.FC = () => {
                     Total Verifications
                   </Typography>
                   <Typography variant="h4" component="div">
-                    {stationData.totalVerifications.toLocaleString()}
+                    {stationData.verificationStats?.total.toLocaleString() || '0'}
                   </Typography>
                 </CardContent>
               </Card>
@@ -310,8 +286,14 @@ const PollingStationPage: React.FC = () => {
                   <Typography color="text.secondary" variant="body2" gutterBottom>
                     Success Rate
                   </Typography>
-                  <Typography variant="h4" component="div" color={stationData.verificationRate > 94 ? 'success.main' : 'warning.main'}>
-                    {stationData.verificationRate}%
+                  <Typography variant="h4" component="div" color={
+                    (stationData.verificationStats?.successful / stationData.verificationStats?.total * 100) > 94 
+                      ? 'success.main' 
+                      : 'warning.main'
+                  }>
+                    {stationData.verificationStats?.total > 0 
+                      ? ((stationData.verificationStats.successful / stationData.verificationStats.total) * 100).toFixed(1) 
+                      : '0'}%
                   </Typography>
                 </CardContent>
               </Card>
@@ -326,7 +308,7 @@ const PollingStationPage: React.FC = () => {
                   <Box display="flex" alignItems="center">
                     <CheckCircleIcon color="success" sx={{ mr: 1 }} />
                     <Typography variant="h5" component="div">
-                      {stationData.successfulVerifications.toLocaleString()}
+                      {stationData.verificationStats?.successful.toLocaleString() || '0'}
                     </Typography>
                   </Box>
                 </CardContent>
@@ -342,7 +324,7 @@ const PollingStationPage: React.FC = () => {
                   <Box display="flex" alignItems="center">
                     <CancelIcon color="error" sx={{ mr: 1 }} />
                     <Typography variant="h5" component="div">
-                      {stationData.failedVerifications.toLocaleString()}
+                      {stationData.verificationStats?.failed.toLocaleString() || '0'}
                     </Typography>
                   </Box>
                 </CardContent>
@@ -360,38 +342,35 @@ const PollingStationPage: React.FC = () => {
               </IconButton>
             </Box>
             <Typography variant="body2" color="text.secondary" gutterBottom>
-              {queueData.filter((voter) => voter.status === 'waiting').length} voters waiting, 
-              {queueData.filter((voter) => voter.status === 'processing').length} currently being processed
+              {queueData.filter((voter) => voter.verificationStatus === 'pending').length} voters waiting, 
+              {queueData.filter((voter) => voter.verificationStatus === 'processing').length} currently being processed
             </Typography>
             <Divider sx={{ mb: 2 }} />
             <Box sx={{ maxHeight: 180, overflow: 'auto' }}>
-              {queueData.map((voter) => (
-                <Box 
-                  key={voter.id} 
-                  sx={{ 
-                    mb: 1, 
-                    p: 1, 
-                    bgcolor: voter.status === 'processing' ? 'action.hover' : 'background.paper',
-                    borderRadius: 1
-                  }}
-                >
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography variant="body2">
-                      {voter.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {voter.status === 'processing' ? 'Now Processing' : `Position: ${voter.position}`}
-                    </Typography>
-                  </Box>
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography variant="caption" color="text.secondary">
-                      ID: {voter.id}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Wait: {voter.waitTime}
-                    </Typography>
-                  </Box>
-                </Box>
+              {queueData.map((voter, index) => (
+                <ListItem key={voter.id} divider>
+                  <ListItemAvatar>
+                    <Avatar>
+                      <PersonIcon />
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={voter.fullName}
+                    secondary={
+                      <>
+                        Voter ID: {voter.voterID}
+                        <br />
+                        Status: {voter.verificationStatus}
+                      </>
+                    }
+                  />
+                  <ListItemSecondaryAction>
+                    <Chip 
+                      label={`Position ${index + 1}`}
+                      color={index === 0 ? 'success' : 'primary'}
+                    />
+                  </ListItemSecondaryAction>
+                </ListItem>
               ))}
             </Box>
           </Paper>
@@ -413,39 +392,58 @@ const PollingStationPage: React.FC = () => {
             Recent Verifications
           </Typography>
           <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
-            {recentVerifications.map((verification) => (
-              <Paper 
-                key={verification.id} 
-                sx={{ 
-                  p: 2, 
-                  mb: 2, 
-                  bgcolor: verification.status === 'failed' ? 'error.light' : 'background.paper',
-                  borderLeft: verification.status === 'failed' ? '4px solid' : 'none',
-                  borderColor: 'error.main'
-                }}
-              >
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Box>
-                    <Typography variant="subtitle1">
-                      {verification.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      ID: {verification.id} | Time: {verification.timestamp} | Verified by: {verification.verifiedBy}
-                    </Typography>
-                    {verification.reason && (
-                      <Typography variant="body2" color="error">
-                        Reason: {verification.reason}
-                      </Typography>
-                    )}
-                  </Box>
-                  <Chip 
-                    icon={verification.status === 'success' ? <CheckCircleIcon /> : <CancelIcon />}
-                    label={verification.status === 'success' ? 'Successful' : 'Failed'} 
-                    color={verification.status === 'success' ? 'success' : 'error'} 
+            {recentVerifications.map((voter) => {
+              // Format date for display
+              let verificationTime = 'Unknown time';
+              if (voter.verificationDate) {
+                let date: Date;
+                if (voter.verificationDate instanceof Timestamp) {
+                  date = voter.verificationDate.toDate();
+                } else if (typeof voter.verificationDate === 'object' && 'seconds' in voter.verificationDate) {
+                  date = new Date((voter.verificationDate as any).seconds * 1000);
+                } else {
+                  date = new Date(voter.verificationDate as any);
+                }
+                verificationTime = date.toLocaleTimeString();
+              }
+              
+              return (
+                <ListItem key={voter.id} divider>
+                  <ListItemAvatar>
+                    <Avatar>
+                      {voter.verificationStatus === 'verified' ? 
+                        <CheckCircleIcon color="success" /> : 
+                        <CancelIcon color="error" />
+                      }
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={voter.fullName}
+                    secondary={
+                      <>
+                        Voter ID: {voter.voterID}
+                        <br />
+                        Time: {verificationTime}
+                        <br />
+                        Verified by: {voter.verificationOfficerId || 'System'}
+                        {voter.verificationNotes && (
+                          <>
+                            <br />
+                            Notes: {voter.verificationNotes}
+                          </>
+                        )}
+                      </>
+                    }
                   />
-                </Box>
-              </Paper>
-            ))}
+                  <ListItemSecondaryAction>
+                    <Chip 
+                      label={voter.verificationStatus === 'verified' ? 'Verified' : 'Failed'}
+                      color={voter.verificationStatus === 'verified' ? 'success' : 'error'}
+                    />
+                  </ListItemSecondaryAction>
+                </ListItem>
+              );
+            })}
           </Box>
         </TabPanel>
         

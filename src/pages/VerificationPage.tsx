@@ -15,6 +15,7 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  SelectChangeEvent,
   Alert,
   CircularProgress
 } from '@mui/material';
@@ -74,6 +75,7 @@ const VerificationPage: React.FC = () => {
   const [pollingStations, setPollingStations] = useState<any[]>([]);
   const [selectedState, setSelectedState] = useState('');
   const [selectedDistrict, setSelectedDistrict] = useState('');
+  const [selectedPollingStation, setSelectedPollingStation] = useState<any>(null);
   const [userLocation, setUserLocation] = useState<{latitude: number, longitude: number} | undefined>();
   
   // Fetch states on component mount
@@ -146,6 +148,16 @@ const VerificationPage: React.FC = () => {
       );
     }
   }, []);
+  
+  // Watch for changes to polling station ID
+  useEffect(() => {
+    if (voterDetails.pollingStationId) {
+      const station = pollingStations.find(s => s.id === voterDetails.pollingStationId);
+      setSelectedPollingStation(station || null);
+    } else {
+      setSelectedPollingStation(null);
+    }
+  }, [voterDetails.pollingStationId, pollingStations]);
   
   // Handle ID upload
   const handleIdUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -241,15 +253,15 @@ const VerificationPage: React.FC = () => {
   };
   
   // Update the polling station selection in the form
-  const handleStateChange = (e: React.ChangeEvent<{ value: unknown }>) => {
-    const state = e.target.value as string;
+  const handleStateChange = (e: SelectChangeEvent<string>) => {
+    const state = e.target.value;
     setSelectedState(state);
     setSelectedDistrict('');
     setVoterDetails({ ...voterDetails, state, district: '', pollingStationId: '' });
   };
   
-  const handleDistrictChange = (e: React.ChangeEvent<{ value: unknown }>) => {
-    const district = e.target.value as string;
+  const handleDistrictChange = (e: SelectChangeEvent<string>) => {
+    const district = e.target.value;
     setSelectedDistrict(district);
     setVoterDetails({ ...voterDetails, district, pollingStationId: '' });
   };

@@ -1,10 +1,11 @@
-import samplePollingStations from '../data/samplePollingStations';
+import indianPollingStations from '../data/indianPollingStations';
 import { db } from '../config/firebase';
 import { 
   collection, doc, getDoc, getDocs, query, where, 
   updateDoc, addDoc, onSnapshot, Timestamp 
 } from 'firebase/firestore';
 import { PollingStation } from '../types/pollingStation';
+import { loadRealPollingStationData } from '../utils/dataLoader';
 
 // Interface for Voter Info
 export interface VoterInfo {
@@ -38,8 +39,47 @@ class VoterService {
   private pollingStations: PollingStation[] = [];
 
   constructor() {
-    // Initialize with sample data
-    this.initializePollingStations(samplePollingStations);
+    // Initialize with real data
+    this.loadRealData();
+  }
+
+  async loadRealData() {
+    try {
+      const stations = await loadRealPollingStationData();
+      this.pollingStations = stations;
+      console.log(`Initialized ${stations.length} real polling stations`);
+    } catch (error) {
+      console.error('Failed to load real data, falling back to Indian stations data:', error);
+      this.initializeRealPollingStations();
+    }
+  }
+
+  initializeRealPollingStations() {
+    // Convert from record format to array format and add required properties
+    const stations = Object.values(indianPollingStations).map(station => {
+      return {
+        ...station,
+        location: {
+          // Default coordinates for New Delhi if not available
+          latitude: 28.6139,
+          longitude: 77.2090
+        },
+        totalVoters: station.totalVerifications || 0,
+        verificationStats: {
+          total: station.totalVerifications || 0,
+          successful: station.successfulVerifications || 0,
+          failed: station.failedVerifications || 0
+        },
+        staff: station.staff ? station.staff.map(s => ({
+          ...s,
+          contact: s.status // Use status as contact since it's required
+        })) : [],
+        lastUpdated: new Date()
+      } as PollingStation;
+    });
+    
+    this.pollingStations = stations;
+    console.log(`Initialized ${stations.length} real polling stations`);
   }
 
   initializePollingStations(stations: PollingStation[]) {

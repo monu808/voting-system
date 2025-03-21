@@ -1,0 +1,11 @@
+station_id,name,address,booth_number,district,state,latitude,longitude,total_voters,status
+PS001,Central Community Center,Block A Connaught Place,NDP-001,New Delhi,Delhi,28.6315,77.2167,3245,operational
+PS002,North District School,Civil Lines North Delhi,NDP-002,North Delhi,Delhi,28.6812,77.2247,2890,operational
+PS003,South Library,Vasant Kunj South Delhi,SDP-001,South Delhi,Delhi,28.5298,77.1593,3125,operational
+PS004,East City Hall,Laxmi Nagar East Delhi,EDP-001,East Delhi,Delhi,28.6315,77.2873,3323,operational
+PS005,West Delhi College,Rajouri Garden,WDP-001,West Delhi,Delhi,28.6492,77.1070,2875,operational
+PS006,Mayur Vihar Community Hall,Phase 1 Mayur Vihar,EDP-002,East Delhi,Delhi,28.6092,77.2902,2955,operational
+PS007,Saket School,Saket South Delhi,SDP-002,South Delhi,Delhi,28.5293,77.2159,3210,operational
+PS008,Model Town Center,Model Town North Delhi,NDP-003,North Delhi,Delhi,28.7158,77.1910,2780,operational
+PS009,Dwarka Sector 10 Hall,Sector 10 Dwarka,WDP-002,West Delhi,Delhi,28.5823,77.0500,3450,operational
+PS010,Rohini Community Center,Sector 9 Rohini,NDP-004,North Delhi,Delhi,28.7410,77.1175,3125,operational 

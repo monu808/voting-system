@@ -41,6 +41,7 @@ import { Chart as ChartJS, registerables } from 'chart.js';
 import { useAuth } from '../contexts/AuthContext';
 import voterService from '../services/voterService';
 import { VoterInfo } from '../services/voterService';
+import { Timestamp } from 'firebase/firestore';
 
 // Register ChartJS components
 ChartJS.register(...registerables);
@@ -62,6 +63,9 @@ const AdminDashboard: React.FC = () => {
     failed: 0,
     pending: 0
   });
+  
+  // State for hourly verification data
+  const [hourlyVerifications, setHourlyVerifications] = useState<Array<{hour: string, count: number}>>([]);
   
   // Subscribe to real-time data
   useEffect(() => {
@@ -99,6 +103,72 @@ const AdminDashboard: React.FC = () => {
     };
   }, []);
   
+  // Fetch hourly verification data
+  useEffect(() => {
+    // Function to generate hourly data based on actual voters
+    const generateHourlyData = (votersList: VoterInfo[]) => {
+      // Group voters by verification hour
+      const hourCounts: Record<string, number> = {};
+      
+      // Initialize hours from 7 AM to 8 PM (standard voting hours)
+      for (let i = 7; i <= 20; i++) {
+        hourCounts[`${i}:00`] = 0;
+      }
+      
+      // Count verifications by hour
+      votersList.forEach(voter => {
+        if (voter.verificationDate) {
+          let date: Date;
+          
+          if (voter.verificationDate instanceof Timestamp) {
+            // Firebase Timestamp format
+            date = voter.verificationDate.toDate();
+          } else if (typeof voter.verificationDate === 'object' && 'seconds' in voter.verificationDate) {
+            // Timestamp-like object
+            date = new Date((voter.verificationDate as any).seconds * 1000);
+          } else {
+            // Try to parse as Date or fallback to current date
+            try {
+              date = new Date(voter.verificationDate as any);
+            } catch (e) {
+              date = new Date();
+            }
+          }
+          
+          const hour = date.getHours();
+          const hourKey = `${hour}:00`;
+          
+          if (hourCounts[hourKey] !== undefined) {
+            hourCounts[hourKey]++;
+          }
+        }
+      });
+      
+      // Convert to array format
+      return Object.entries(hourCounts).map(([hour, count]) => ({
+        hour,
+        count
+      })).sort((a, b) => {
+        const hourA = parseInt(a.hour);
+        const hourB = parseInt(b.hour);
+        return hourA - hourB;
+      });
+    };
+    
+    // Set hourly data when voters are loaded
+    if (voters.length > 0) {
+      const hourlyData = generateHourlyData(voters);
+      setHourlyVerifications(hourlyData);
+    } else {
+      // Fallback to empty hourly data
+      const emptyData = Array.from({ length: 14 }, (_, i) => {
+        const hour = (i + 7) % 24; // Start from 7 AM
+        return { hour: `${hour}:00`, count: 0 };
+      });
+      setHourlyVerifications(emptyData);
+    }
+  }, [voters]);
+  
   // Data for verification status chart (using real-time data)
   const verificationStatusData = {
     labels: ['Successful', 'Failed', 'Pending'],
@@ -110,16 +180,6 @@ const AdminDashboard: React.FC = () => {
       },
     ],
   };
-  
-  // Generate hourly verification data (mock for now)
-  const hourlyVerifications = Array.from({ length: 14 }, (_, i) => {
-    const hour = (i + 7) % 24; // Start from 7 AM
-    const hourLabel = `${hour}:00`;
-    return {
-      hour: hourLabel,
-      count: Math.floor(Math.random() * 1000) // This would come from real-time data in production
-    };
-  });
   
   // Data for hourly verification chart
   const hourlyVerificationData = {

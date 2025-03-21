@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { ThemeProvider, CssBaseline } from '@mui/material';
+import { ThemeProvider, CssBaseline, CircularProgress, Box } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import theme from './theme';
 import Header from './components/Header';
@@ -13,11 +13,53 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { AnalyticsProvider } from './contexts/AnalyticsContext';
 import NotFoundPage from './pages/NotFoundPage';
 import ProfilePage from './pages/ProfilePage';
-import PollingStationPage from './pages/PollingStationPage';
+import IndianPollingStations from './pages/PollingStationPage';
 import BlockchainVerificationPage from './pages/BlockchainVerificationPage';
 import PollingStationsPage from './pages/PollingStationsPage';
+// Import for side effects - voterService initializes polling stations in its constructor
+import voterService from './services/voterService';
 
 const App: React.FC = () => {
+  const [dataLoaded, setDataLoaded] = useState(false);
+  
+  // Initialize polling stations
+  useEffect(() => {
+    const checkDataLoaded = () => {
+      const stations = voterService.getAllPollingStations();
+      if (stations.length > 0) {
+        setDataLoaded(true);
+      } else {
+        // Check again after a delay
+        setTimeout(checkDataLoaded, 500);
+      }
+    };
+    
+    // Start checking for data load
+    checkDataLoaded();
+    
+    console.log("App initialized and waiting for polling stations data");
+  }, []);
+
+  if (!dataLoaded) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            height: '100vh',
+            flexDirection: 'column'
+          }}
+        >
+          <CircularProgress />
+          <Box sx={{ mt: 2 }}>Loading polling station data...</Box>
+        </Box>
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -46,7 +88,7 @@ const App: React.FC = () => {
               } />
               <Route path="/polling-stations/:stationId" element={
                 <ProtectedRoute adminOnly>
-                  <PollingStationPage />
+                  <IndianPollingStations />
                 </ProtectedRoute>
               } />
               <Route path="/polling-stations" element={
